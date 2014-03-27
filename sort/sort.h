@@ -46,6 +46,18 @@ bool CParallelSort::Sort( boost::asio::io_service &io, int* begin, int* end, int
    for( int chunk_index = 0; chunk_index < chunks_count; chunk_index++ )
       io.post( boost::bind( &CParallelSort::SerialSort, this, bound[chunk_index], bound[chunk_index + 1] ) );
    SerialSortWait( chunks_count );
+//--- сливаем отсортированные промежутки
+   std::vector<int*> chunk( bound );
+   chunk.pop_back();
+   for( int* current = result; current < result + ( end - begin ); current++ )
+     {
+      int chunk_min = -1;
+      for( int chunk_index = 0; chunk_index < chunk.size(); chunk_index++ )
+         if( chunk[chunk_index] < bound[chunk_index + 1] && ( chunk_min < 0 || *chunk[chunk_index] < *chunk[chunk_min] ) )
+            chunk_min = chunk_index;
+      *current = *chunk[chunk_min];
+      chunk[chunk_min]++;
+     }
 //--- ok
    return( true );
   }
@@ -69,3 +81,4 @@ void CParallelSort::SerialSortWait( const int chunks_count )
    while( m_chunks_sorted < chunks_count )
       m_chunks_sorted_cond.wait( lock );
   }
+//+----------------------------------------------------+
