@@ -128,7 +128,7 @@
     <ClCompile Include="sortMain.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="sort.h" />
+    <ClInclude Include="ParallelSort.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
