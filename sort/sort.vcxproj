@@ -128,6 +128,10 @@
     <ClCompile Include="sortMain.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="BinFile.h" />
+    <ClInclude Include="Chunk.h" />
+    <ClInclude Include="ExternalSort.h" />
+    <ClInclude Include="OutputFile.h" />
     <ClInclude Include="ParallelSort.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

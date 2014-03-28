@@ -41,6 +41,7 @@ public:
 //+----------------------------------------------------+
 //| Generate random file                               |
 //+----------------------------------------------------+
+template<class IntType>
 void generate_random_file( const string &file_name, const size_t file_size )
   {
 //--- open the output file
@@ -52,13 +53,14 @@ void generate_random_file( const string &file_name, const size_t file_size )
       return;
      }
 //--- generate numbers
-   default_random_engine rnd;
+   default_random_engine rnd( (unsigned) time( nullptr ) );
+   uniform_int_distribution<IntType> dist( std::numeric_limits<IntType>::min(), std::numeric_limits<IntType>::max() );
    char buffer[4 * KB];
    size_t buffer_size=0;
-   for(size_t i=0; i < file_size / sizeof(int); i++)
+   for(size_t i=0; i < file_size / sizeof(IntType); i++)
      {
-      *((unsigned*)(buffer + buffer_size)) = rnd();
-      buffer_size += sizeof(int);
+      *((IntType*)(buffer + buffer_size)) = dist( rnd );
+      buffer_size += sizeof(IntType);
       if( buffer_size == sizeof( buffer ) )
         {
          fout.write( buffer, buffer_size );
@@ -128,7 +130,7 @@ int main(int argc,char** argv)
       return( -1 );
      }
 //--- generate random file
-   generate_random_file( file_name, file_size );
+   generate_random_file<unsigned>( file_name, file_size );
 //--- ok
    return(0);
   }
