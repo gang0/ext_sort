@@ -15,8 +15,8 @@ public:
 
 private:
    //--- атрибуты файла
-   int               m_mode;
    std::string       m_name;
+   int               m_mode;
    //--- поток
    FILE*             m_stream;
 
@@ -24,6 +24,9 @@ public:
    //--- конструктор/деструктор
                      CBinFile();
                     ~CBinFile();
+   //--- атрибуты
+   std::string       Name() { return( m_name ); }
+   int               Mode() { return( m_mode ); }
    //--- открытие/закрытие файла
    bool              Open( const std::string &name, const int mode);
    void              Close();

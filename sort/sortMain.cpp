@@ -38,7 +38,7 @@ const long long GB = 1024 * MB;
 //--- 
 const int CONCURRENCY_MULTIPLIER = 4;
 const int CHUNKS_MAX=256;
-const size_t BUFFER_SIZE = 64 * MB;
+const size_t RAM_MAX = 256 * MB;
 //+----------------------------------------------------+
 //| Timer, ms                                          |
 //+----------------------------------------------------+
@@ -104,6 +104,7 @@ int main(int argc,char** argv)
       cerr << "failed to read parameters" << endl;
       return( -1 );
      }
+//--- TODO: проверить размер файла, кратен 4, не более 16 √б, количество чанков не более 256
 //--- 
    try
      {

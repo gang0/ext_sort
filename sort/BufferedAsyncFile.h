@@ -26,6 +26,8 @@ private:
 public:
                      CBufferedAsyncFile( boost::asio::io_service &io, const size_t buffer_size );
                     ~CBufferedAsyncFile();
+   //--- имя файла
+   std::string       Name() { return( m_file.Name() ); }
    //--- открытие/закрытие файла
    bool              Open( const std::string &file_name, const int mode );
    void              Close();
