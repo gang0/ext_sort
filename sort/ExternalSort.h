@@ -10,7 +10,7 @@ private:
    //--- параллельная сортировка
    ParallelSort      m_parallel_sort;
    //--- сортировка
-   CBinFilePtrArray  m_chunks;
+   CBufferedAsyncFile::PtrArray m_chunks;
 
 public:
    //--- конструктор/деструктор
@@ -20,7 +20,7 @@ public:
 
 private:
    //--- разделяет исходный файл на отсортированные части
-   bool              Split( CBinFile &input_file, CBinFilePtrArray &chunks );
+   bool              Split( CBufferedAsyncFile &input_file, CBufferedAsyncFile::PtrArray &chunks );
    //--- сливает отсортированные части в выходной файл
    bool              Merge( CBinFilePtrArray &chunks, CBinFile &output_file );
   };
@@ -31,85 +31,51 @@ template<class IntType, class ParallelSort>
 void CExternalSort<IntType, ParallelSort>::Sort( std::string input_file_name, std::string output_file_name )
   {
 //--- открываем входной файл
-   CBinFile input_file;
+   CBufferedAsyncFile input_file( m_io_service, BUFFER_SIZE );
    if( !input_file.Open( input_file_name, CBinFile::MODE_READ ) )
       return;
 //--- открываем выходной файл
-   CBinFile output_file;
-   if( !output_file.Open( output_file_name, CBinFile::MODE_WRITE ) )
-      return;
+//    CBinFile output_file;
+//    if( !output_file.Open( output_file_name, CBinFile::MODE_WRITE ) )
+//       return;
 //--- разделяем входной файл на сортированные части
    if( !Split( input_file, m_chunks ) )
       return;
 //--- сливаем части в выходной файл
-   Merge( m_chunks, output_file );
+//    Merge( m_chunks, output_file );
   }
 //+----------------------------------------------------+
 //| Разделяет исходный файл на отсортированные части   |
 //+----------------------------------------------------+
 template<class IntType, class ParallelSort>
-bool CExternalSort<IntType, ParallelSort>::Split( CBinFile &input_file, CBinFilePtrArray &chunks )
+bool CExternalSort<IntType, ParallelSort>::Split( CBufferedAsyncFile &input_file, CBufferedAsyncFile::PtrArray &chunks )
   {
-   CAutoTimer timer( "Split" );
-//--- TODO: корректно очищать память при выходе
-//--- TODO: в случае аварийного выхода, другие потоки могут использовать эти буферы
-   char* buffer = new( std::nothrow ) char[BUFFER_SIZE];
-   char* buffer_result = new( std::nothrow ) char[BUFFER_SIZE];
-   char* buffer_read = new( std::nothrow ) char[BUFFER_SIZE];
-   char* buffer_write = new( std::nothrow ) char[BUFFER_SIZE];
-   size_t buffer_len = BUFFER_SIZE;
-   size_t buffer_read_len = BUFFER_SIZE;
-   size_t buffer_write_len = BUFFER_SIZE;
-   if( buffer == NULL )
+   CAutoTimer timer( "split" );
+//--- интерфейс для записи чанков
+   CBufferedAsyncFile chunk_file( m_io_service, BUFFER_SIZE );
+   int chunk_file_index = 0;
+//--- буфер для начальных и отсортированных данных
+   std::unique_ptr<char[]> unsorted_data( new char[BUFFER_SIZE] );
+   std::unique_ptr<char[]> sorted_data( new char[BUFFER_SIZE] );
+//--- читаем порцию данных
+   size_t data_size = input_file.Read( unsorted_data );
+   while( data_size > 0 )
      {
-      cerr << "failed to allocate buffer" << endl;
-      return( false );
-     }
-//--- синхронно читаем первую часть
-   input_file.ReadAsync( m_io_service, buffer, &buffer_len );
-   input_file.Wait();
-   while( buffer_len > 0 )
-     {
-      //--- читаем следующую порцию данных
-      input_file.ReadAsync( m_io_service, buffer_read, &buffer_read_len );
       //--- обрабатываем текущую порцию данных
         {
          CAutoTimer timer( "sort" );
-         if( !m_parallel_sort.Sort( (IntType*) buffer, (IntType*) ( buffer + buffer_len ), (IntType*) buffer_result ) )
+         if( !m_parallel_sort.Sort( (IntType*) unsorted_data.get(), (IntType*) ( unsorted_data.get() + data_size ), (IntType*) sorted_data.get() ) )
             return( false );
         }
-      memcpy( buffer, buffer_result, BUFFER_SIZE );
-//       std::sort( ( int* )buffer, ( int* ) ( buffer + buffer_len ) );
-      //--- создаем файл с чанком
       //--- добавляем новый чанк
-      chunks.push_back( new CBinFile() );
-      CBinFile &chunk = *chunks[chunks.size() - 1];
       std::ostringstream chunk_name;
-      chunk_name << "chunk_" << chunks.size() - 1 << ".dat";
-      if( !chunk.Open( chunk_name.str(), CBinFile::MODE_RW | CBinFile::MODE_TEMP ) )
-         return( false );
+      chunk_name << "chunk_" << chunk_file_index++ << ".dat";
+      chunk_file.Open( chunk_name.str(), CBinFile::MODE_WRITE );
       //--- асинхронно записываем чанк в файл
-      //--- ждем завершение записи предыдущего чанка
-      if( chunks.size() > 1 )
-         chunks[chunks.size() - 2]->Wait();
-      char* buffer_temp = buffer_write;
-      buffer_write = buffer;
-      buffer_write_len = buffer_len;
-      buffer = buffer_temp;
-      buffer_len = 0;
-      chunk.WriteAsync( m_io_service, buffer_write, &buffer_write_len );
-      //--- меняем буферы
-      input_file.Wait();
-      buffer_temp = buffer;
-      buffer = buffer_read;
-      buffer_len = buffer_read_len;
-      buffer_read = buffer_temp;
-      buffer_read_len = BUFFER_SIZE;
+      chunk_file.Write( sorted_data, data_size );
+      //--- читаем следующую порцию
+      data_size = input_file.Read( unsorted_data );
      }
-   chunks[chunks.size() - 1]->Wait();
-   delete[] buffer;
-   delete[] buffer_read;
-   delete[] buffer_write;
    return( true );
   }
 //+----------------------------------------------------+

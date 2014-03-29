@@ -18,6 +18,7 @@
 #include <boost/asio.hpp>
 #include <boost/thread.hpp>
 #include <boost/thread/mutex.hpp>
+#include <boost/smart_ptr.hpp>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,10 +26,11 @@
 using namespace std;
 //--- 
 #include "BinFile.h"
+#include "BufferedAsyncFile.h"
 #include "ParallelSort.h"
 #include "ExternalSort.h"
-#include "Chunk.h"
-#include "OutputFile.h"
+// #include "Chunk.h"
+// #include "OutputFile.h"
 //--- 
 const long long KB = 1024;
 const long long MB = 1024 * KB;

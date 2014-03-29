@@ -129,6 +129,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="BinFile.h" />
+    <ClInclude Include="BufferedAsyncFile.h" />
     <ClInclude Include="Chunk.h" />
     <ClInclude Include="ExternalSort.h" />
     <ClInclude Include="OutputFile.h" />

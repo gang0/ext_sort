@@ -19,44 +19,30 @@ private:
    std::string       m_name;
    //--- поток
    FILE*             m_stream;
-   //--- синхронизация доступа к потоку
-   boost::mutex      m_stream_sync;
-   //--- управление асинхронными операциями
-   bool              m_handler_complete;
-   boost::mutex      m_handler_complete_sync;
-   boost::condition_variable m_handler_complete_sync_event;
 
 public:
    //--- конструктор/деструктор
                      CBinFile();
                     ~CBinFile();
    //--- открытие/закрытие файла
-   bool              Open( const string &name, const int mode);
+   bool              Open( const std::string &name, const int mode);
    void              Close();
    //--- чтение/запись из файла
-   bool              Read( char* buffer, size_t* size );
-   bool              Write( const char* buffer, size_t* size );
-   //--- асинхронные чтение/запись
-   bool              ReadAsync( boost::asio::io_service &io, char* buffer, size_t* size );
-   bool              WriteAsync( boost::asio::io_service &io, const char* buffer, size_t* size );
-   void              Wait();
+   size_t            Read( char* buffer, const size_t buffer_size );
+   size_t            Write( const char* buffer, const size_t buffer_size );
    //--- перемещение указателя в начало
-   void              SeekBegin() { if( m_stream != NULL ) fseek( m_stream, 0, SEEK_SET ); }
+   void              Seek( size_t offset, int method ) { if( m_stream != NULL ) fseek( m_stream, (long) offset, method ); }
    //--- удаление файла
    void              Remove() { Close(); if( !m_name.empty() ) remove( m_name.c_str() ); }
 
 private:
    const CBinFile&   operator=( const CBinFile &bin_file );
-   //--- обработка асинхронного чтения/записи
-   void              ReadAsyncHandler( char* buffer, size_t* size );
-   void              WriteAsyncHandler( const char* buffer, size_t* size );
-   void              AsyncHandlerCompleted() { m_handler_complete_sync.lock(); m_handler_complete = true; m_handler_complete_sync.unlock(); m_handler_complete_sync_event.notify_all(); }
   };
 typedef vector<CBinFile*> CBinFilePtrArray;
 //+----------------------------------------------------+
 //| Конструктор                                        |
 //+----------------------------------------------------+
-CBinFile::CBinFile() : m_mode( 0 ), m_stream( nullptr ), m_handler_complete( false )
+CBinFile::CBinFile() : m_mode( 0 ), m_stream( nullptr )
   {
   }
 //+----------------------------------------------------+
@@ -69,14 +55,14 @@ CBinFile::~CBinFile()
 //+----------------------------------------------------+
 //| Открытие файла                                     |
 //+----------------------------------------------------+
-bool CBinFile::Open( const string &name, const int mode )
+bool CBinFile::Open( const std::string &name, const int mode )
   {
    Close();
 //--- запоминаем атрибуты
    m_name = name;
    m_mode = mode;
 //--- открываем файл в нужном режиме
-   const char* mode_str = NULL;
+   const char* mode_str = nullptr;
    if( mode & MODE_WRITE )
       if( mode & MODE_READ ) mode_str = "w+b";
       else
@@ -84,7 +70,7 @@ bool CBinFile::Open( const string &name, const int mode )
    else
       mode_str = "rSb";
    errno_t err = fopen_s( &m_stream, name.c_str(), mode_str);
-   if( err != 0 || m_stream == NULL )
+   if( err != 0 || m_stream == nullptr )
      {
       cerr << "failed to open file " << name << " (" << err << ")" << endl;
       return( false );
@@ -97,10 +83,10 @@ bool CBinFile::Open( const string &name, const int mode )
 //+----------------------------------------------------+
 void CBinFile::Close()
   {
-   if( m_stream != NULL )
+   if( m_stream != nullptr )
      {
       fclose( m_stream );
-      m_stream = NULL;
+      m_stream = nullptr;
       if( m_mode & MODE_TEMP )
          Remove();
      }
@@ -108,84 +94,23 @@ void CBinFile::Close()
 //+----------------------------------------------------+
 //| Чтение из файла                                    |
 //+----------------------------------------------------+
-bool CBinFile::Read( char* buffer, size_t* size )
+size_t CBinFile::Read( char* buffer, const size_t buffer_size )
   {
-   if( buffer == NULL || size == NULL )
-      return( false );
-   if( m_stream == NULL )
-      return( false );
-   *size = fread( buffer, 1, *size, m_stream );
-   return( true );
+   if( buffer == nullptr || buffer_size == 0 )
+      return( 0 );
+   if( m_stream == nullptr )
+      return( 0 );
+   return( fread( buffer, 1, buffer_size, m_stream ) );
   }
 //+----------------------------------------------------+
 //| Запись в файл                                      |
 //+----------------------------------------------------+
-bool CBinFile::Write( const char* buffer, size_t* size )
+size_t CBinFile::Write( const char* buffer, const size_t buffer_size )
   {
-   if( buffer == NULL || size == NULL )
-      return( false );
-   if( m_stream == NULL )
-      return( false );
-   *size = fwrite( buffer, 1, *size, m_stream);
-   return( true );
-  }
-//+----------------------------------------------------+
-//| Асинхронное чтение                                 |
-//+----------------------------------------------------+
-bool CBinFile::ReadAsync( boost::asio::io_service &io, char* buffer, size_t* size )
-  {
-   if( buffer == nullptr || size == nullptr )
-      return( false );
-//--- TODO: нужно ли проверять значение метода post
-   io.post( boost::bind( &CBinFile::ReadAsyncHandler, this, buffer, size ) );
-   return( true );
-  }
-//+----------------------------------------------------+
-//| Асинхронная запись                                 |
-//+----------------------------------------------------+
-bool CBinFile::WriteAsync( boost::asio::io_service &io, const char* buffer, size_t* size )
-  {
-   if( buffer == nullptr || size == nullptr )
-      return( false );
-//--- TODO: проверять возврат метода post
-   io.post( boost::bind( &CBinFile::WriteAsyncHandler, this, buffer, size ) );
-   return( true );
-  }
-//+----------------------------------------------------+
-//| Ожидание завершения асинхронной операции           |
-//+----------------------------------------------------+
-void CBinFile::Wait()
-  {
-   boost::unique_lock<boost::mutex> lock( m_handler_complete_sync );
-//--- TODO: перейти на wait_for
-   if( !m_handler_complete )
-     {
-      m_handler_complete_sync_event.wait( lock );
-      m_handler_complete = false;
-     }
-  }
-//+----------------------------------------------------+
-//| Обработчик асинхронного чтения                     |
-//+----------------------------------------------------+
-void CBinFile::ReadAsyncHandler( char* buffer, size_t* size )
-  {
-   if( buffer == nullptr || size == nullptr )
-      return;
-//--- читаем данные
-   boost::lock_guard<boost::mutex> lock( m_stream_sync );
-   Read( buffer, size );
-   AsyncHandlerCompleted();
-  }
-//+----------------------------------------------------+
-//|                                                    |
-//+----------------------------------------------------+
-void CBinFile::WriteAsyncHandler( const char* buffer, size_t* size )
-  {
-   if( buffer == nullptr || size == nullptr )
-      return;
-//--- пишем данные
-   boost::lock_guard<boost::mutex> lock( m_stream_sync );
-   Write( buffer, size );
-   AsyncHandlerCompleted();
+   if( buffer == nullptr || buffer_size == 0 )
+      return( 0 );
+   if( m_stream == nullptr )
+      return( 0 );
+   return( fwrite( buffer, 1, buffer_size, m_stream ) );
   }
 //+----------------------------------------------------+

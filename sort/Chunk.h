@@ -19,7 +19,7 @@ public:
    bool              SetFile( CBinFile* file );
    //--- инициализация
    bool              Initialize( boost::asio::io_service &io );
-   void              Wait() { m_file->Wait(); }
+//    void              Wait() { m_file->Wait(); }
    //--- получение следующего элемента из чанка
    bool              NextItem( boost::asio::io_service &io, int &item );
   };
@@ -32,7 +32,7 @@ bool CChunk::SetFile( CBinFile* file )
       return( false );
    m_file = file;
 //--- устанавливаем курсор на начало файла и читаем буфер
-   m_file->SeekBegin();
+   m_file->Seek( 0, SEEK_SET );
 //--- 
    m_data_len = 0;
    m_buffer_len = 0;
