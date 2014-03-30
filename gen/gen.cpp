@@ -1,5 +1,5 @@
 //+----------------------------------------------------+
-//| 23.03.2014                                         |
+//| Author: Maxim Ulyanov <ulyanov.maxim@gmail.com>    |
 //+----------------------------------------------------+
 #include <chrono>
 #include <iostream>
@@ -60,6 +60,7 @@ bool parameters( const char* file_name_arg, const char* file_size_arg, string &f
    stringstream file_size_arg_s( file_size_arg );
    file_size_arg_s >> file_size >> size_unit;
    if( !size_unit.empty() )
+     {
       if( size_unit.compare( "GB" )==0 )
          file_size *= GB;
       else
@@ -73,6 +74,7 @@ bool parameters( const char* file_name_arg, const char* file_size_arg, string &f
                cerr << "invalid size unit";
                return( false );
               }
+     }
    return( true );
   }
 //+----------------------------------------------------+
@@ -108,3 +110,4 @@ int main(int argc,char** argv)
 //--- ok
    return(0);
   }
+//+----------------------------------------------------+

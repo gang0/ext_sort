@@ -1,4 +1,7 @@
 //+----------------------------------------------------+
+//| Author: Maxim Ulyanov <ulyanov.maxim@gmail.com>    |
+//+----------------------------------------------------+
+//+----------------------------------------------------+
 //| Бинарный файл                                      |
 //+----------------------------------------------------+
 class CBinFile
@@ -65,8 +68,7 @@ bool CBinFile::Open( const std::string &name, const int mode )
          mode_str = "wSb";
    else
       mode_str = "rSb";
-   errno_t err = fopen_s( &m_stream, name.c_str(), mode_str);
-   if( err != 0 || m_stream == nullptr )
+   if( ( m_stream = fopen( name.c_str(), mode_str) ) == nullptr )
       return( false );
 //--- 
    return( true );

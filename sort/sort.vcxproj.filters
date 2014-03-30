@@ -32,7 +32,7 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="external_sort.cpp">
+    <ClCompile Include="sort.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

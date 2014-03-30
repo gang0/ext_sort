@@ -1,4 +1,7 @@
 //+----------------------------------------------------+
+//| Author: Maxim Ulyanov <ulyanov.maxim@gmail.com>    |
+//+----------------------------------------------------+
+//+----------------------------------------------------+
 //| Внешняя сортировка                                 |
 //+----------------------------------------------------+
 template<class IntType = unsigned, class ParallelSort = CParallelQuickSort<IntType>>
@@ -84,7 +87,6 @@ bool CExternalSort<IntType, ParallelSort>::Split( std::string &input_file_name )
      }
 //--- интерфейс для записи чанков
    CBufferedAsyncFile chunk_file( m_io_service, m_buffer_size );
-   int chunk_file_index = 0;
 //--- буфер для начальных и отсортированных данных
    std::unique_ptr<char[]> unsorted_data( new char[m_buffer_size] );
    std::unique_ptr<char[]> sorted_data( new char[m_buffer_size] );
@@ -129,13 +131,13 @@ bool CExternalSort<IntType, ParallelSort>::Merge(  std::string &output_file_name
       return( false );
      }
 //--- отсортированные чанки
-   CDataChunk<IntType>::PtrArray data_chunks;
+   typename CDataChunk<IntType>::PtrArray data_chunks;
 //--- бинарная куча элементов с наименьшим в вершине
    std::priority_queue<CDataChunkItem<IntType>, std::vector<CDataChunkItem<IntType>>, std::greater<CDataChunkItem<IntType>>> data_items;
 //--- открываем чанки с отсортированными частями
    for( const auto &chunk_name : m_chunks )
      {
-      CDataChunk<IntType>::Ptr chunk( new CDataChunk<IntType>( m_io_service, ( RAM_MAX / 4 ) / m_chunks.size() ) );
+      typename CDataChunk<IntType>::Ptr chunk( new CDataChunk<IntType>( m_io_service, ( RAM_MAX / 4 ) / m_chunks.size() ) );
       if( !chunk->Open( chunk_name, CBinFile::MODE_READ | CBinFile::MODE_TEMP ) )
         {
          std::cerr << "failed to open chunk file " << chunk_name << std::endl;

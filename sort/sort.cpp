@@ -1,14 +1,43 @@
 //+----------------------------------------------------+
-//| 22.03.2014                                         |
+//| Author: Maxim Ulyanov <ulyanov.maxim@gmail.com>    |
 //+----------------------------------------------------+
-//--- stl
+//--- для msvc компилятора
+#define _CRT_SECURE_NO_WARNINGS
+#define _WIN32_WINNT 0x0601
+//--- C
+#include <stdio.h>
+#include <stdlib.h>
+//--- STL
 #include <chrono>
 #include <iostream>
+#include <sstream>
 #include <fstream>
 #include <string>
 #include <algorithm>
+#include <vector>
+#include <queue>
+#include <functional>
 //--- boost
 #include <boost/filesystem.hpp>
+#include <boost/asio.hpp>
+#include <boost/thread.hpp>
+#include <boost/thread/mutex.hpp>
+//--- 
+const long long KB = 1024;
+const long long MB = 1024 * KB;
+const long long GB = 1024 * MB;
+//+----------------------------------------------------+
+//| Определяет степень параллелизма                    |
+//+----------------------------------------------------+
+const int CONCURRENCY_MULTIPLIER = 4;  
+//+----------------------------------------------------+
+//| Доступная память                                   |
+//+----------------------------------------------------+
+const long long RAM_MAX = 256 * MB;
+//+----------------------------------------------------+
+//| Максимальное количество файловых чанков            |
+//+----------------------------------------------------+
+const int CHUNKS_MAX = 256;
 //+----------------------------------------------------+
 //| Timer, ms                                          |
 //+----------------------------------------------------+
@@ -34,6 +63,12 @@ public:
                      CAutoTimer( const std::string name ) : m_name( name ) { std::cout << m_name << " started" << std::endl; m_timer.Start(); }
                     ~CAutoTimer() { std::cout << m_name << " completed in " << m_timer.End() << " ms" << std::endl; }
   };
+//--- 
+#include "BinFile.h"
+#include "BufferedAsyncFile.h"
+#include "DataChunk.h"
+#include "ParallelSort.h"
+#include "ExternalSort.h"
 //+----------------------------------------------------+
 //| Parameters                                         |
 //+----------------------------------------------------+
@@ -51,7 +86,7 @@ bool parameters( const char* input_file_name_arg, const char* output_file_name_a
 //+----------------------------------------------------+
 void usage()
   {
-   std::cout << "Usage: internal_sort <input_file_name> <output_file_name>" << std::endl;
+   std::cout << "Usage: external_sort <input_file_name> <output_file_name>" << std::endl;
    std::cout << '\t' << "input_file_name - name of the input file" << std::endl;
    std::cout << '\t' << "output_file_name - name of the output file" << std::endl;
   }
@@ -67,11 +102,23 @@ bool file_check( const std::string &file_name )
       return( false );
      }
 //--- проверяем размер
-   size_t file_size = (size_t) boost::filesystem::file_size( file_name );
+   long long file_size = boost::filesystem::file_size( file_name );
 //--- размер должен быть кратен размеру данных
    if( file_size % sizeof( unsigned ) != 0 )
      {
       std::cerr << "file size is not a multiple of unsigned 32bit integer size (" << file_size << ")" << std::endl;
+      return( false );
+     }
+//--- размер не должен превышать 16 Gb
+   if( file_size > 16 * GB )
+     {
+      std::cerr << "file size exceeds maximum size of 16 GB (" << file_size << ")" << std::endl;
+      return( false );
+     }
+//--- ограничиваем количество чанков
+   if( file_size / ( RAM_MAX / 4 ) > CHUNKS_MAX )
+     {
+      std::cerr << "file size exceeds maximum size of " << CHUNKS_MAX * RAM_MAX / 4 << " (" << file_size << ")" <<std::endl;
       return( false );
      }
 //--- ok
@@ -82,7 +129,7 @@ bool file_check( const std::string &file_name )
 //+----------------------------------------------------+
 int main(int argc,char** argv)
   {
-   CAutoTimer timer( "internal sort" );
+   CAutoTimer timer( "external sort" );
 //--- получим параметры
    if( argc != 3 )
      {
@@ -102,15 +149,19 @@ int main(int argc,char** argv)
 //--- сортировка
    try
      {
-      std::ifstream input_file( input_file_name, std::ios_base::in | std::ios_base::binary );
-      long long data_size = boost::filesystem::file_size( input_file_name );
-      if( data_size > std::numeric_limits<unsigned>::max() )
-         return( -1 );
-      std::unique_ptr<char[]> data( new char[(unsigned)data_size] );
-      input_file.read( data.get(), data_size );
-      std::sort( (unsigned*) data.get(), (unsigned*) ( data.get() + data_size ) );
-      std::ofstream output_file( output_file_name, std::ios_base::out | std::ios_base::binary );
-      output_file.write( data.get(), data_size );
+      //--- подготавливаем многопоточное окружение
+      int concurrency_level = boost::thread::hardware_concurrency() * CONCURRENCY_MULTIPLIER;
+      boost::asio::io_service io;
+      CExternalSort<> ext_sort( io, concurrency_level );
+      io.post( boost::bind( &CExternalSort<>::Sort, &ext_sort, input_file_name, output_file_name ) );
+      //--- создаем пул потоков
+      boost::thread_group threads_pool;
+      for( int thread_index = 0; thread_index < concurrency_level; thread_index++ )
+         threads_pool.create_thread( boost::bind( &boost::asio::io_service::run, &io ) );
+      //--- 
+      io.run();
+      //--- TODO: ожидать с таймаутом
+      threads_pool.join_all();
      }
    catch( std::exception &ex )
      {

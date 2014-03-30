@@ -1,4 +1,7 @@
 //+----------------------------------------------------+
+//| Author: Maxim Ulyanov <ulyanov.maxim@gmail.com>    |
+//+----------------------------------------------------+
+//+----------------------------------------------------+
 //| Параллельная сортировка                            |
 //+----------------------------------------------------+
 template<class IntType = unsigned>
@@ -55,7 +58,7 @@ private:
 //| Конструктор                                        |
 //+----------------------------------------------------+
 template<class IntType>
-CParallelSortLinearMerge<IntType>::CParallelSortLinearMerge( boost::asio::io_service &io, const int concurrency_level ) : CParallelSort( io, concurrency_level ), m_chunks_sorted( 0 )
+CParallelSortLinearMerge<IntType>::CParallelSortLinearMerge( boost::asio::io_service &io, const int concurrency_level ) : CParallelSort<IntType>( io, concurrency_level ), m_chunks_sorted( 0 )
   {
   }
 //+----------------------------------------------------+
@@ -69,7 +72,7 @@ bool CParallelSortLinearMerge<IntType>::SortImpl( IntType* begin, IntType* end, 
 //--- TODO: вынести этапы сортировки в отдельные методы
 //--- разбиваем данные на несколько промежутков в зависимости от степени параллелизма
 //--- TODO: возможно стоит разбивать на более мелкие части
-   const int chunks_count = ConcurrencyLevel();
+   const int chunks_count = CParallelSort<IntType>::ConcurrencyLevel();
    std::vector<IntType*> bound;
    for( int bound_index = 0; bound_index < chunks_count; bound_index++ )
       bound.push_back( begin + bound_index * ( end - begin ) / chunks_count );
@@ -78,7 +81,7 @@ bool CParallelSortLinearMerge<IntType>::SortImpl( IntType* begin, IntType* end, 
    SortStart();
      {
       for( int chunk_index = 0; chunk_index < chunks_count; chunk_index++ )
-         IOService().post( boost::bind( &CParallelSortLinearMerge::SerialSort, this, bound[chunk_index], bound[chunk_index + 1] ) );
+         CParallelSort<IntType>::IOService().post( boost::bind( &CParallelSortLinearMerge::SerialSort, this, bound[chunk_index], bound[chunk_index + 1] ) );
      }
    SortWait( chunks_count );
 //--- сливаем отсортированные промежутки
@@ -154,7 +157,7 @@ private:
 //| Конструктор                                        |
 //+----------------------------------------------------+
 template<class IntType>
-CParallelQuickSort<IntType>::CParallelQuickSort( boost::asio::io_service &io, const int concurrency_level ) : CParallelSort( io, concurrency_level ), m_chunks_total( 0 ), m_chunks_sorted( 0 )
+CParallelQuickSort<IntType>::CParallelQuickSort( boost::asio::io_service &io, const int concurrency_level ) : CParallelSort<IntType>( io, concurrency_level ), m_chunks_total( 0 ), m_chunks_sorted( 0 )
   {
   }
 //+----------------------------------------------------+
@@ -167,13 +170,13 @@ bool CParallelQuickSort<IntType>::SortImpl( IntType* begin, IntType* end, IntTyp
       return( false );
 //--- определяем минимальный размер чанка, который сортируем параллельно
 //--- TODO: возможно стоит разбивать на более мелкие части
-   m_chunk_min_size = ( end - begin ) / ConcurrencyLevel();
+   m_chunk_min_size = ( end - begin ) / CParallelSort<IntType>::ConcurrencyLevel();
 //--- запускаем параллельную сортировку
    SortStart();
      {
       QuickSortAdd();
       //--- указатель за последним элементом данных смещаем влево на элемент данных
-      IOService().post( boost::bind( &CParallelQuickSort::QuickSort, this, begin, end ) );
+      CParallelSort<IntType>::IOService().post( boost::bind( &CParallelQuickSort::QuickSort, this, begin, end ) );
      }
    SortWait();
 //--- копируем результат
@@ -214,12 +217,12 @@ void CParallelQuickSort<IntType>::QuickSort( IntType* begin, IntType* end )
       if( begin < right )
         {
          QuickSortAdd();
-         IOService().post( boost::bind( &CParallelQuickSort::QuickSort, this, begin, right + 1 ) );
+         CParallelSort<IntType>::IOService().post( boost::bind( &CParallelQuickSort::QuickSort, this, begin, right + 1 ) );
         }
       if( left < end - 1 )
         {
          QuickSortAdd();
-         IOService().post( boost::bind( &CParallelQuickSort::QuickSort, this, left, end ) );
+         CParallelSort<IntType>::IOService().post( boost::bind( &CParallelQuickSort::QuickSort, this, left, end ) );
         }
      }
    QuickSortComplete();
