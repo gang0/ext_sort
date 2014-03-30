@@ -13,12 +13,14 @@ private:
    ParallelSort      m_parallel_sort;
    //--- входной файл
    CBufferedAsyncFile m_input_file;
+   //--- выходной файл
+   CDataChunk<IntType> m_output_file;
    //--- имена файлов с чанками
    std::vector<std::string> m_chunks;
 
 public:
    //--- конструктор/деструктор
-                     CExternalSort( boost::asio::io_service &io, const int concurrency_level ) : m_buffer_size( RAM_MAX / 4 ), m_io_service( io ), m_parallel_sort( io, concurrency_level ), m_input_file( io, m_buffer_size ) {};
+                     CExternalSort( boost::asio::io_service &io, const int concurrency_level ) : m_buffer_size( RAM_MAX / 4 ), m_io_service( io ), m_parallel_sort( io, concurrency_level ), m_input_file( io, m_buffer_size ), m_output_file( io, RAM_MAX / 16 /*TODO: определять размер*/) {};
    //--- сортировка файла <input_file_name>, результат в файле <output_file_name>
    void              Sort( std::string input_file_name, std::string output_file_name );
 
@@ -30,7 +32,7 @@ private:
    //--- разделяет исходный файл на отсортированные части
    bool              Split( CBufferedAsyncFile &input_file );
    //--- сливает отсортированные части в выходной файл
-   bool              Merge( CBinFilePtrArray &chunks, CBinFile &output_file );
+   bool              Merge( CDataChunk<IntType> &output_file );
   };
 //+----------------------------------------------------+
 //| Сортировка                                         |
@@ -42,14 +44,13 @@ void CExternalSort<IntType, ParallelSort>::Sort( std::string input_file_name, st
    if( !m_input_file.Open( input_file_name, CBinFile::MODE_READ ) )
       return;
 //--- открываем выходной файл
-//    CBinFile output_file;
-//    if( !output_file.Open( output_file_name, CBinFile::MODE_WRITE ) )
-//       return;
+   if( !m_output_file.Open( output_file_name, CBinFile::MODE_WRITE ) )
+      return;
 //--- разделяем входной файл на сортированные части
    if( !Split( m_input_file ) )
       return;
 //--- сливаем части в выходной файл
-//    Merge( m_chunks, output_file );
+   Merge( m_output_file );
   }
 //+----------------------------------------------------+
 //| Формирование имени файла для следующего чанка      |
@@ -94,6 +95,12 @@ bool CExternalSort<IntType, ParallelSort>::Split( CBufferedAsyncFile &input_file
    size_t data_size = input_file.Read( unsorted_data );
    while( data_size > 0 )
      {
+      //--- проверим размер данных
+      if( data_size > m_buffer_size || data_size % sizeof( IntType ) != 0 )
+        {
+         std::cerr << "invalid size of data" << std::endl;
+         return( false );
+        }
       //--- сортируем
         {
          CAutoTimer timer( "sort" );
@@ -116,55 +123,44 @@ bool CExternalSort<IntType, ParallelSort>::Split( CBufferedAsyncFile &input_file
 //+----------------------------------------------------+
 //| Сливает отсортированные части в выходной файл      |
 //+----------------------------------------------------+
-struct ChunkItem 
-  {
-   int               item;
-   UINT              index;
-   bool              operator<( const ChunkItem &chunk_item ) const { return( this->item > chunk_item.item ); } // NOTE: сравниваем наоборот, сначала из очереди выходят наименьшие
-  };
 template<class IntType,class ParallelSort>
-bool CExternalSort<IntType, ParallelSort>::Merge( CBinFilePtrArray &chunks_files, CBinFile &output_file )
+bool CExternalSort<IntType, ParallelSort>::Merge( CDataChunk<IntType> &output_file )
   {
    CAutoTimer timer( "Merge" );
-   bool empty[CHUNKS_MAX]={0};
-   std::vector<CChunk*> chunks;
-   std::priority_queue<ChunkItem> top;
-//--- инициализируем чанки, асинхронно заполняя буферы
-   chunks.reserve( chunks_files.size() );
-   for( int chunk_index = 0; chunk_index < chunks_files.size(); chunk_index++ )
+   CDataChunk<IntType>::PtrArray data_chunks;
+//--- TODO: сравнивать элементы наоборот!
+   std::priority_queue<CDataChunkItem<IntType>> data_items;
+//--- открываем чанки с отсортированными частями
+   for( const auto &chunk_name : m_chunks )
      {
       //--- TODO: вычислять размер чанка
-      CChunk* chunk = new CChunk( BUFFER_SIZE / ( 8 ) );
-      chunk->SetFile( chunks_files[chunk_index] );
-      chunk->Initialize( m_io_service );
-      chunks.push_back( chunk );
-     }
-//--- заполняем кучу
-   for( int chunk_index=0; chunk_index < chunks.size(); chunk_index++ )
-     {
-      //--- дожидаемся заверешния инициализации
-      chunks[chunk_index]->Wait();
-      //--- получаем первый элемент чанка
-      ChunkItem item;
-      item.index = chunk_index;
-      chunks[chunk_index]->NextItem( m_io_service, item.item );
-      top.push( item );
-     }
-   COutputFile out_file( BUFFER_SIZE / 8 );
-   out_file.SetFile( &output_file );
-   while( !top.empty() )
-     {
-      ChunkItem item = top.top();
-      top.pop();
+      CDataChunk<IntType>::Ptr chunk( new CDataChunk<IntType>( m_io_service, RAM_MAX / 16 ) );
+      if( !chunk->Open( chunk_name, CBinFile::MODE_READ | CBinFile::MODE_TEMP ) )
         {
-         size_t len = sizeof( int );
-         if( !out_file.WriteItem( m_io_service, item.item ) )
-            return( false );
-         if( chunks[item.index]->NextItem( m_io_service, item.item ) )
-            top.push( item );
-         else
-            empty[item.index] = true;
+         std::cerr << "failed to open chunk file " << chunk_name << std::endl;
+         return( false );
         }
+      data_chunks.push_back( chunk );
+     }
+//--- заполняем кучу из первых элементов каждого чанка
+   for( const auto &chunk : data_chunks )
+     {
+      CDataChunkItem<IntType> chunk_item( chunk );
+      if( chunk_item.Next() )
+         data_items.push( chunk_item );
+     }
+//--- на каждой итерации берем элемент сверху кучи
+   while( !data_items.empty() )
+     {
+      CDataChunkItem<IntType> item = data_items.top();
+      data_items.pop();
+      if( !output_file.Write( item ) )
+        {
+         std::cerr << "failed to write to output file" << std::endl;
+         return( false );
+        }
+      if( item.Next() )
+         data_items.push( item );
      }
    return( true );
   }

@@ -9,8 +9,7 @@ public:
       MODE_NONE = 0,
       MODE_READ = 0x01,
       MODE_WRITE = 0x02,
-      MODE_TEMP = 0x04,
-      MODE_RW = MODE_READ | MODE_WRITE,
+      MODE_TEMP = 0x04
      };
 
 private:

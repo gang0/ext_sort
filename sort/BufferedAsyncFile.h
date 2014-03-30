@@ -26,8 +26,9 @@ private:
 public:
                      CBufferedAsyncFile( boost::asio::io_service &io, const size_t buffer_size );
                     ~CBufferedAsyncFile();
-   //--- имя файла
+   //--- атрибуты
    std::string       Name() { return( m_file.Name() ); }
+   int               Mode() { return( m_file.Mode() ); }
    //--- открытие/закрытие файла
    bool              Open( const std::string &file_name, const int mode );
    void              Close();
@@ -127,6 +128,9 @@ void CBufferedAsyncFile::AsyncComplete()
 //+----------------------------------------------------+
 void CBufferedAsyncFile::AsyncWait()
   {
+//--- предварительно проверяем без лока
+   if( m_completed )
+      return;
    boost::unique_lock<boost::mutex> lock( m_completed_sync );
 //--- TODO: ожидать по таймауту
    if( !m_completed )

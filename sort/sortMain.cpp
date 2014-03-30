@@ -27,9 +27,9 @@ using namespace std;
 //--- 
 #include "BinFile.h"
 #include "BufferedAsyncFile.h"
+#include "DataChunk.h"
 #include "ParallelSort.h"
 #include "ExternalSort.h"
-// #include "Chunk.h"
 // #include "OutputFile.h"
 //--- 
 const long long KB = 1024;
@@ -37,7 +37,7 @@ const long long MB = 1024 * KB;
 const long long GB = 1024 * MB;
 //--- 
 const int CONCURRENCY_MULTIPLIER = 4;
-const int CHUNKS_MAX=256;
+const int CHUNKS_MAX = 256;
 const size_t RAM_MAX = 256 * MB;
 //+----------------------------------------------------+
 //| Timer, ms                                          |
@@ -108,15 +108,6 @@ int main(int argc,char** argv)
 //--- 
    try
      {
-      //--- тест сортировки
-//       int* data = new int[BUFFER_SIZE];
-//       default_random_engine rnd;
-//       rnd.seed( ( unsigned )time( nullptr ) );
-//       for( int i = 0; i < BUFFER_SIZE; i++ )
-//          *((unsigned*)(data + i)) = rnd();
-//       int* result = new int[BUFFER_SIZE];
-//       CParallelQuickSort<> p_sort( io, boost::thread::hardware_concurrency() * 4 );
-//       io.post( boost::bind( &CParallelSort<>::Sort, &p_sort, data, data + BUFFER_SIZE, result ) );
       //--- подготавливаем многопоточное окружение
       int concurrency_level = boost::thread::hardware_concurrency() * CONCURRENCY_MULTIPLIER;
       boost::asio::io_service io;

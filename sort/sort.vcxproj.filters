@@ -32,10 +32,10 @@
     <ClInclude Include="OutputFile.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Chunk.h">
+    <ClInclude Include="BufferedAsyncFile.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="BufferedAsyncFile.h">
+    <ClInclude Include="DataChunk.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
