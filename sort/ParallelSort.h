@@ -206,7 +206,7 @@ void CParallelQuickSort<IntType>::QuickSort( IntType* begin, IntType* end )
          if( left <= right )
            {
             if( left < right )
-               swap( *left, *right );
+               std::swap( *left, *right );
             left++;
             right--;
            }

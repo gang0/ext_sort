@@ -14,31 +14,6 @@ const long long KB = 1024;
 const long long MB = 1024 * KB;
 const long long GB = 1024 * MB;
 //+----------------------------------------------------+
-//| Timer, ms                                          |
-//+----------------------------------------------------+
-class CTimer
-  {
-private:
-   chrono::time_point<chrono::high_resolution_clock> m_start;
-
-public:
-   void              Start() { m_start = chrono::high_resolution_clock::now(); }
-   long long         End() { auto end = chrono::high_resolution_clock::now(); return( chrono::duration_cast<chrono::milliseconds>( end - m_start ).count() ); }
-  };
-//+----------------------------------------------------+
-//| Auto timer                                         |
-//+----------------------------------------------------+
-class CAutoTimer
-  {
-private:
-   CTimer            m_timer;
-   string            m_name;
-
-public:
-                     CAutoTimer( const string name ) : m_name( name ) { m_timer.Start(); }
-                    ~CAutoTimer() { cout << "Timer " << m_name << ": elapsed " << m_timer.End() << " ms" << endl; }
-  };
-//+----------------------------------------------------+
 //| Generate random file                               |
 //+----------------------------------------------------+
 template<class IntType>
@@ -114,7 +89,6 @@ void usage()
 //+----------------------------------------------------+
 int main(int argc,char** argv)
   {
-   CAutoTimer timer( "main" );
 //--- input parameters
    if( argc != 3 )
      {

@@ -15,11 +15,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="sortMain.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
     <ClInclude Include="ParallelSort.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -29,14 +24,16 @@
     <ClInclude Include="BinFile.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="OutputFile.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="BufferedAsyncFile.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="DataChunk.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="external_sort.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

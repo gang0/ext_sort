@@ -32,15 +32,9 @@ public:
    //--- чтение/запись из файла
    size_t            Read( char* buffer, const size_t buffer_size );
    size_t            Write( const char* buffer, const size_t buffer_size );
-   //--- перемещение указателя в начало
-   void              Seek( size_t offset, int method ) { if( m_stream != NULL ) fseek( m_stream, (long) offset, method ); }
    //--- удаление файла
    void              Remove() { Close(); if( !m_name.empty() ) remove( m_name.c_str() ); }
-
-private:
-   const CBinFile&   operator=( const CBinFile &bin_file );
   };
-typedef vector<CBinFile*> CBinFilePtrArray;
 //+----------------------------------------------------+
 //| Конструктор                                        |
 //+----------------------------------------------------+
@@ -73,10 +67,7 @@ bool CBinFile::Open( const std::string &name, const int mode )
       mode_str = "rSb";
    errno_t err = fopen_s( &m_stream, name.c_str(), mode_str);
    if( err != 0 || m_stream == nullptr )
-     {
-      cerr << "failed to open file " << name << " (" << err << ")" << endl;
       return( false );
-     }
 //--- 
    return( true );
   }

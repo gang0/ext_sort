@@ -11,28 +11,24 @@ private:
    boost::asio::io_service &m_io_service;
    //--- параллельная сортировка
    ParallelSort      m_parallel_sort;
-   //--- входной файл
-   CBufferedAsyncFile m_input_file;
-   //--- выходной файл
-   CDataChunk<IntType> m_output_file;
    //--- имена файлов с чанками
    std::vector<std::string> m_chunks;
 
 public:
    //--- конструктор/деструктор
-                     CExternalSort( boost::asio::io_service &io, const int concurrency_level ) : m_buffer_size( RAM_MAX / 4 ), m_io_service( io ), m_parallel_sort( io, concurrency_level ), m_input_file( io, m_buffer_size ), m_output_file( io, RAM_MAX / 16 /*TODO: определять размер*/) {};
+                     CExternalSort( boost::asio::io_service &io, const int concurrency_level ) : m_buffer_size( RAM_MAX / 4 ), m_io_service( io ), m_parallel_sort( io, concurrency_level ) {};
    //--- сортировка файла <input_file_name>, результат в файле <output_file_name>
    void              Sort( std::string input_file_name, std::string output_file_name );
 
 private:
    //--- формирование имени файла для следующего чанка
-   std::string       ChunkNextName();
+   std::string       ChunkNextName( const std::string &input_file_name );
    //--- добавление чанка
    void              ChunkAdd( const std::string &chunk_name );
    //--- разделяет исходный файл на отсортированные части
-   bool              Split( CBufferedAsyncFile &input_file );
+   bool              Split( std::string &input_file_name );
    //--- сливает отсортированные части в выходной файл
-   bool              Merge( CDataChunk<IntType> &output_file );
+   bool              Merge( std::string &output_file_name );
   };
 //+----------------------------------------------------+
 //| Сортировка                                         |
@@ -40,26 +36,20 @@ private:
 template<class IntType, class ParallelSort>
 void CExternalSort<IntType, ParallelSort>::Sort( std::string input_file_name, std::string output_file_name )
   {
-//--- открываем входной файл
-   if( !m_input_file.Open( input_file_name, CBinFile::MODE_READ ) )
-      return;
-//--- открываем выходной файл
-   if( !m_output_file.Open( output_file_name, CBinFile::MODE_WRITE ) )
-      return;
 //--- разделяем входной файл на сортированные части
-   if( !Split( m_input_file ) )
+   if( !Split( input_file_name ) )
       return;
 //--- сливаем части в выходной файл
-   Merge( m_output_file );
+   Merge( output_file_name );
   }
 //+----------------------------------------------------+
 //| Формирование имени файла для следующего чанка      |
 //+----------------------------------------------------+
 template<class IntType, class ParallelSort>
-std::string CExternalSort<IntType, ParallelSort>::ChunkNextName()
+std::string CExternalSort<IntType, ParallelSort>::ChunkNextName( const std::string &input_file_name )
   {
 //--- формируем имя на основе имени входного файла, расширение файла оставляем
-   std::string chunk_name( m_input_file.Name() );
+   std::string chunk_name( input_file_name );
    chunk_name.append( "_" );
 //--- формируем строковый индекс
    std::ostringstream chunk_index;
@@ -82,9 +72,16 @@ void CExternalSort<IntType, ParallelSort>::ChunkAdd( const std::string &chunk_na
 //| Разделяет исходный файл на отсортированные части   |
 //+----------------------------------------------------+
 template<class IntType, class ParallelSort>
-bool CExternalSort<IntType, ParallelSort>::Split( CBufferedAsyncFile &input_file )
+bool CExternalSort<IntType, ParallelSort>::Split( std::string &input_file_name )
   {
-   CAutoTimer timer( "split" );
+   CAutoTimer timer( "input file splitting to sorted chunks" );
+//--- исходный файл
+   CBufferedAsyncFile input_file( m_io_service, m_buffer_size );
+   if( !input_file.Open( input_file_name, CBinFile::MODE_READ ) )
+     {
+      std::cerr << "failed to open input file " << input_file_name << std::endl;
+      return( false );
+     }
 //--- интерфейс для записи чанков
    CBufferedAsyncFile chunk_file( m_io_service, m_buffer_size );
    int chunk_file_index = 0;
@@ -102,13 +99,10 @@ bool CExternalSort<IntType, ParallelSort>::Split( CBufferedAsyncFile &input_file
          return( false );
         }
       //--- сортируем
-        {
-         CAutoTimer timer( "sort" );
-         if( !m_parallel_sort.Sort( (IntType*) unsorted_data.get(), (IntType*) ( unsorted_data.get() + data_size ), (IntType*) sorted_data.get() ) )
-            return( false );
-        }
+      if( !m_parallel_sort.Sort( (IntType*) unsorted_data.get(), (IntType*) ( unsorted_data.get() + data_size ), (IntType*) sorted_data.get() ) )
+         return( false );
       //--- добавляем новый чанк
-      std::string chunk_name = ChunkNextName();
+      std::string chunk_name = ChunkNextName( input_file.Name() );
       if( chunk_file.Open( chunk_name, CBinFile::MODE_WRITE ) )
          ChunkAdd( chunk_name );
       else
@@ -124,17 +118,24 @@ bool CExternalSort<IntType, ParallelSort>::Split( CBufferedAsyncFile &input_file
 //| Сливает отсортированные части в выходной файл      |
 //+----------------------------------------------------+
 template<class IntType,class ParallelSort>
-bool CExternalSort<IntType, ParallelSort>::Merge( CDataChunk<IntType> &output_file )
+bool CExternalSort<IntType, ParallelSort>::Merge(  std::string &output_file_name )
   {
-   CAutoTimer timer( "Merge" );
+   CAutoTimer timer( "merging sorted chunks to output file" );
+//--- выходной файл
+   CDataChunk<IntType> output_file( m_io_service, RAM_MAX / 4 );
+   if( !output_file.Open( output_file_name, CBinFile::MODE_WRITE ) )
+     {
+      std::cerr << "failed to open output file " << output_file_name << std::endl;
+      return( false );
+     }
+//--- отсортированные чанки
    CDataChunk<IntType>::PtrArray data_chunks;
-//--- TODO: сравнивать элементы наоборот!
-   std::priority_queue<CDataChunkItem<IntType>> data_items;
+//--- бинарная куча элементов с наименьшим в вершине
+   std::priority_queue<CDataChunkItem<IntType>, std::vector<CDataChunkItem<IntType>>, std::greater<CDataChunkItem<IntType>>> data_items;
 //--- открываем чанки с отсортированными частями
    for( const auto &chunk_name : m_chunks )
      {
-      //--- TODO: вычислять размер чанка
-      CDataChunk<IntType>::Ptr chunk( new CDataChunk<IntType>( m_io_service, RAM_MAX / 16 ) );
+      CDataChunk<IntType>::Ptr chunk( new CDataChunk<IntType>( m_io_service, ( RAM_MAX / 4 ) / m_chunks.size() ) );
       if( !chunk->Open( chunk_name, CBinFile::MODE_READ | CBinFile::MODE_TEMP ) )
         {
          std::cerr << "failed to open chunk file " << chunk_name << std::endl;

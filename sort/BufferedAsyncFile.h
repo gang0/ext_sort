@@ -3,11 +3,6 @@
 //+----------------------------------------------------+
 class CBufferedAsyncFile
   {
-public:
-   //--- определения
-   typedef unique_ptr<CBufferedAsyncFile> Ptr;
-   typedef std::vector<Ptr> PtrArray;
-
 private:
    //--- файл
    CBinFile          m_file;
