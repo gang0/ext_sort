@@ -23,4 +23,4 @@ $(EXEC):	$(OBJECTS)
 	$(CC) $(CFLAGS) $< -o $@
 
 clean:
-	rm -rf *.o sort
+	rm -rf *.o gen
